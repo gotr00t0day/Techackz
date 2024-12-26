@@ -1,7 +1,7 @@
 from Wappalyzer import Wappalyzer, WebPage
 from colorama import Fore, Style
 import urllib3
-import warnings
+import warnings              
 import subprocess
 import json
 import os
@@ -62,22 +62,34 @@ def run_nuclei_scan(url, tech_name, version=None):
     """
     Run a Nuclei scan targeting specific technology
     """
-    # Base command with JSON output
-    command = ["nuclei", "-u", url, "-json"]
+    # Base command with JSON output and silent mode
+    command = ["nuclei", "-u", url, "-j", "-silent"]  # Added -silent flag
     
-    # Add technology-specific templates
-    command.extend(["-t", f"technologies/{tech_name.lower()}"])
+    tech_name_lower = tech_name.lower()
     
-    # If version is provided, add version-specific templates
-    if version:
-        command.extend(["-t", f"technologies/{tech_name.lower()}/{version}"])
+    if tech_name_lower == "php":
+        # For PHP, we need a broader scan approach
+        command = ["nuclei", "-u", url, "-j", "-silent",
+            "-tags", "php",
+            "-severity", "low,medium,high,critical",
+        ]
+        
+        if version:
+            command.extend([
+                "-tags", f"php-{version}",
+                "-tags", f"php/{version}"
+            ])
+    else:
+        # Regular technology scanning
+        command.extend(["-tags", tech_name_lower])
+        if version:
+            command.extend(["-tags", f"{tech_name_lower}-{version}"])
     
     try:
-        print(f"\nRunning Nuclei scan for {tech_name}...")
         process = subprocess.run(command, capture_output=True, text=True)
         return process.stdout
     except subprocess.CalledProcessError as e:
-        print(f"Error running Nuclei scan: {str(e)}")
+        print(f"{Fore.RED}Error running Nuclei scan: {str(e)}{Style.RESET_ALL}")
         return None
 
 def parse_arguments():
@@ -111,6 +123,24 @@ def parse_arguments():
     parser.add_argument(
         '--no-tech',
         help='Skip technology detection and run all Nuclei scans',
+        action='store_true'
+    )
+    
+    parser.add_argument(
+        '--ignore-ssl',
+        help='Ignore SSL certificate verification',
+        action='store_true'
+    )
+    
+    parser.add_argument(
+        '-t', '--technology',
+        help='Specify technology to scan for (e.g., "wordpress", "nginx")',
+        type=str
+    )
+
+    parser.add_argument(
+        '-d', '--debug',
+        help='Enable debug mode',
         action='store_true'
     )
     
@@ -160,7 +190,7 @@ def extract_version(tech_info):
         # If version comparison fails, return the first valid version
         return valid_versions[0]
 
-def check_cves(tech_name, version):
+def check_cves(tech_name, version, args):
     """
     Check for known CVEs for a specific technology and version
     """
@@ -189,7 +219,11 @@ def check_cves(tech_name, version):
         }
         
         try:
-            response = requests.get(base_url, params=params)
+            response = requests.get(
+                base_url,
+                params=params,
+                verify=not args.ignore_ssl
+            )
             if response.status_code == 200:
                 data = response.json()
                 
@@ -228,13 +262,36 @@ def main():
     args = parse_arguments()
     
     try:
+        if args.ignore_ssl:
+            # Disable SSL warnings and certificate verification
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            requests.packages.urllib3.disable_warnings()
+            
         if not args.no_tech:
             # Initialize Wappalyzer
             wappalyzer = Wappalyzer.latest()
-            webpage = WebPage.new_from_url(args.url)
+            
+            # Add verify=False when ignore-ssl is specified
+            webpage = WebPage.new_from_url(
+                args.url,
+                verify=not args.ignore_ssl
+            )
             
             # Analyze the webpage
             technologies = wappalyzer.analyze_with_versions_and_categories(webpage)
+            
+            # If specific technology is requested, filter results
+            if args.technology:
+                tech_name = args.technology.lower()
+                filtered_tech = {}
+                for name, info in technologies.items():
+                    if tech_name in name.lower():
+                        filtered_tech[name] = info
+                technologies = filtered_tech
+                
+                if not technologies:
+                    print(f"{Fore.YELLOW}Specified technology '{args.technology}' not found on target{Style.RESET_ALL}")
+                    return
             
             # Check for CVEs
             print("\nChecking for known vulnerabilities...")
@@ -243,7 +300,7 @@ def main():
                 if version:
                     print(f"\n{tech_name} {version}:")
                     
-                    vulnerabilities = check_cves(tech_name, version)
+                    vulnerabilities = check_cves(tech_name, version, args)
                     if vulnerabilities:
                         print(f"Found {len(vulnerabilities)} potential vulnerabilities:")
                         for vuln in vulnerabilities:
@@ -284,13 +341,13 @@ def main():
                         print(f"\nFindings for {tech_name}:")
                         for finding in filtered_findings:
                             print(f"\n  [{finding['severity'].upper()}] {finding['name']}")
-                            print(f"  Template: {finding['template']}")
-                            print(f"  Description: {finding['description']}")
-                            print(f"  Matched at: {finding['matched_at']}")
+                            print(f"{Fore.YELLOW}  Template: {finding['template']}{Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW}  Description: {finding['description']}{Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW}  Matched at: {finding['matched_at']}{Style.RESET_ALL}")
                     else:
-                        print(f"{Fore.RED}  No vulnerabilities found matching severity criteria{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
                 else:
-                    print(f"{Fore.RED}  No vulnerabilities found{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
         
         # Save results to file if specified
         if args.output and scan_results:
@@ -304,3 +361,4 @@ def main():
 if __name__ == "__main__":
     print(f"{Fore.MAGENTA}{banner}{Style.RESET_ALL}")
     main()
+
