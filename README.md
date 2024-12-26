@@ -65,7 +65,7 @@ nuclei -update-templates
 
 ## 📖 Usage
 ```bash
-usage: pentest_tech.py [-h] -u URL [-o OUTPUT] [-s {info,low,medium,high,critical}] [--no-tech]
+usage: techackz.py [-h] -u URL [-o OUTPUT] [-s {info,low,medium,high,critical}] [--no-tech]
 
 Detect web technologies and run targeted Nuclei scans
 
