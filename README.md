@@ -54,13 +54,10 @@ cd TechackZ
 ```bash
 pip install -r requirements.txt
 ```
-3. Install Nuclei
+3. Install Tools
 ```bash
-go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
-```
-4. Update Nuclei templates:
-```bash
-nuclei -update-templates
+chmod +x install.sh
+./install.sh
 ```
 
 ## 📖 Usage
