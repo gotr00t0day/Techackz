@@ -362,3 +362,4 @@ if __name__ == "__main__":
     print(f"{Fore.MAGENTA}{banner}{Style.RESET_ALL}")
     main()
 
+
