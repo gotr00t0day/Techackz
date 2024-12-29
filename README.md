@@ -43,7 +43,7 @@ TechackZ is an advanced web technology detection and vulnerability assessment to
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/TechackZ.git
+git clone https://github.com/gotr00t0day/TechackZ.git
 cd TechackZ
 ````
 2. Install Python dependencies:
