@@ -66,4 +66,4 @@ chmod +x pentest_tech.py
 echo -e "${GREEN}Installation completed successfully!${NC}"
 echo -e "${YELLOW}To start using TechackZ:${NC}"
 echo -e "1. Activate the virtual environment: ${GREEN}source venv/bin/activate${NC}"
-echo -e "2. Run the tool: ${GREEN}python3 pentest_tech.py -u <target_url>${NC}"
+echo -e "2. Run the tool: ${GREEN}python3 techackz.py -u <target_url>${NC}"
