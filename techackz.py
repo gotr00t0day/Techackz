@@ -389,7 +389,47 @@ def main():
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             requests.packages.urllib3.disable_warnings()
             
-        if not args.no_tech:
+        # If specific technology is specified, only scan for that
+        if args.technology:
+            print(f"\nScanning specifically for {args.technology}...")
+            scan_output = run_nuclei_scan(args.url, args.technology)
+            
+            if scan_output:
+                findings = parse_nuclei_output(scan_output)
+                if findings:
+                    print(f"\nFindings for {args.technology}:")
+                    for finding in findings:
+                        try:
+                            severity = finding.get('severity', 'Unknown').upper()
+                            name = finding.get('name', 'Unknown')
+                            template = finding.get('template', 'Unknown')
+                            description = finding.get('description', '')
+                            matched_at = finding.get('matched_at', '')
+                            
+                            print(f"\n  [{severity}] {name}")
+                            print(f"  Template: {template}")
+                            if description:
+                                print(f"  Description: {description}")
+                            if matched_at:
+                                print(f"  Matched at: {matched_at}")
+                            
+                            # Enrich vulnerability data
+                            enriched_finding = enrich_vulnerability_data(finding)
+                            
+                            # Display additional information if available
+                            if enriched_finding['exploit_db']:
+                                print(f"\n  {Fore.RED}Available Exploits:{Style.RESET_ALL}")
+                                for exploit in enriched_finding['exploit_db']:
+                                    print(f"    - {exploit['title']}")
+                                    print(f"      URL: {exploit['url']}")
+                        except Exception as e:
+                            print(f"{Fore.RED}Error processing finding: {str(e)}{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.GREEN}No vulnerabilities found for {args.technology}{Style.RESET_ALL}")
+            return  # Exit after single technology scan
+            
+        # Regular technology detection and scanning mode
+        elif not args.no_tech:
             # Initialize Wappalyzer
             wappalyzer = Wappalyzer.latest()
             webpage = WebPage.new_from_url(
