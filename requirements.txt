@@ -1,4 +1,4 @@
-Wappalyzer
+python-Wappalyzer
 colorama
 requests
 packaging
