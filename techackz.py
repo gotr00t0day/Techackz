@@ -105,10 +105,15 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
-    parser.add_argument(
+    # Create a mutually exclusive group for URL and file
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         '-u', '--url',
-        required=True,
         help='Target URL to scan'
+    )
+    group.add_argument(
+        '-f', '--file',
+        help='File containing list of subdomains to scan'
     )
     
     parser.add_argument(
@@ -148,7 +153,12 @@ def parse_arguments():
         action='store_true'
     )
     
-    return parser.parse_args()
+    args = parser.parse_args()
+    
+    if not args.url and not args.file:
+        parser.error("Either -u/--url or -f/--file must be provided")
+    
+    return args
 
 def normalize_version(version_str):
     """
@@ -380,82 +390,176 @@ def enrich_vulnerability_data(finding):
     
     return enriched_data
 
+def scan_from_file(filename):
+    """
+    Scan multiple domains from a file
+    """
+    try:
+        with open(filename, 'r') as file:
+            subdomains = [line.strip() for line in file if line.strip()]
+        
+        for subdomain in subdomains:
+            print(f"\n{Fore.CYAN}Scanning subdomain: {subdomain}{Style.RESET_ALL}")
+            # Fix URL construction - check if protocol is already present
+            if not subdomain.startswith(('http://', 'https://')):
+                url = f'https://{subdomain}'  # Default to HTTPS
+            else:
+                url = subdomain
+                
+            try:
+                args = parse_arguments()
+                if args.ignore_ssl:
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    requests.packages.urllib3.disable_warnings()
+                
+                # Run the scan for this subdomain
+                if args.technology:
+                    print(f"\nScanning specifically for {args.technology}...")
+                    scan_output = run_nuclei_scan(url, args.technology)
+                    
+                    if scan_output:
+                        findings = parse_nuclei_output(scan_output)
+                        if findings:
+                            print(f"\nFindings for {args.technology}:")
+                            for finding in findings:
+                                try:
+                                    severity = finding.get('severity', 'Unknown').upper()
+                                    name = finding.get('name', 'Unknown')
+                                    template = finding.get('template', 'Unknown')
+                                    description = finding.get('description', '')
+                                    matched_at = finding.get('matched_at', '')
+                                    
+                                    print(f"\n  [{severity}] {name}")
+                                    print(f"  Template: {template}")
+                                    if description:
+                                        print(f"  Description: {description}")
+                                    if matched_at:
+                                        print(f"  Matched at: {matched_at}")
+                                    
+                                    # Enrich vulnerability data
+                                    enriched_finding = enrich_vulnerability_data(finding)
+                                    
+                                    # Display additional information if available
+                                    if enriched_finding['exploit_db']:
+                                        print(f"\n  {Fore.RED}Available Exploits:{Style.RESET_ALL}")
+                                        for exploit in enriched_finding['exploit_db']:
+                                            print(f"    - {exploit['title']}")
+                                            print(f"      URL: {exploit['url']}")
+                                except Exception as e:
+                                    print(f"{Fore.RED}Error processing finding: {str(e)}{Style.RESET_ALL}")
+                        else:
+                            print(f"{Fore.GREEN}No vulnerabilities found for {args.technology}{Style.RESET_ALL}")
+                    return  # Exit after single technology scan
+                    
+                # Regular technology detection and scanning mode
+                elif not args.no_tech:
+                    wappalyzer = Wappalyzer.latest()
+                    webpage = WebPage.new_from_url(url, verify=not args.ignore_ssl)
+                    
+                    # Analyze the webpage
+                    technologies = wappalyzer.analyze_with_versions_and_categories(webpage)
+                    
+                    # Pretty print the results and run Nuclei scans
+                    scan_results = {}
+                    for tech_name, tech_info in technologies.items():
+                        print(f"\n{tech_name}:")
+                        if 'versions' in tech_info:
+                            versions = tech_info['versions']
+                            print(f"  Versions: {Fore.YELLOW}{', '.join(versions)}{Style.RESET_ALL}")
+                            scan_output = run_nuclei_scan(url, tech_name, versions[0] if versions else None)
+                        else:
+                            scan_output = run_nuclei_scan(url, tech_name)
+                            
+                        if scan_output:
+                            findings = parse_nuclei_output(scan_output)
+                            if findings:
+                                scan_results[tech_name] = []
+                                print(f"\nFindings for {tech_name}:")
+                                for finding in findings:
+                                    try:
+                                        severity = finding.get('severity', 'Unknown').upper()
+                                        name = finding.get('name', 'Unknown')
+                                        template = finding.get('template', 'Unknown')
+                                        description = finding.get('description', '')
+                                        matched_at = finding.get('matched_at', '')
+                                        
+                                        print(f"\n  [{severity}] {name}")
+                                        print(f"  Template: {template}")
+                                        if description:
+                                            print(f"  Description: {description}")
+                                        if matched_at:
+                                            print(f"  Matched at: {matched_at}")
+                                        
+                                        # Enrich vulnerability data
+                                        enriched_finding = enrich_vulnerability_data(finding)
+                                        scan_results[tech_name].append(enriched_finding)
+                                        
+                                        # Display additional information
+                                        if enriched_finding['exploit_db']:
+                                            print(f"\n  {Fore.RED}Available Exploits:{Style.RESET_ALL}")
+                                            for exploit in enriched_finding['exploit_db']:
+                                                print(f"    - {exploit['title']}")
+                                                print(f"      URL: {exploit['url']}")
+                                        
+                                        if enriched_finding['metasploit']:
+                                            print(f"\n  {Fore.RED}Metasploit Modules:{Style.RESET_ALL}")
+                                            for module in enriched_finding['metasploit']:
+                                                print(f"    - {module['name']}")
+                                                print(f"      Path: {module['path']}")
+                                        
+                                        if enriched_finding['vulners']:
+                                            vuln_info = enriched_finding['vulners']
+                                            print(f"\n  {Fore.YELLOW}Additional Information:{Style.RESET_ALL}")
+                                            print(f"    CVSS Score: {vuln_info.get('cvss_score', 'N/A')}")
+                                            print(f"    Published: {vuln_info.get('published', 'N/A')}")
+                                            if vuln_info.get('references', []):
+                                                print("    References:")
+                                                for ref in vuln_info['references'][:3]:  # Show first 3 references
+                                                    print(f"      - {ref}")
+                                            
+                                    except Exception as e:
+                                        print(f"{Fore.RED}Error processing finding: {str(e)}{Style.RESET_ALL}")
+                                        continue
+                            else:
+                                print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
+                        else:
+                            print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
+                    
+                    # Save results to file if specified
+                    if args.output and scan_results:
+                        with open(args.output, 'w') as f:
+                            json.dump(scan_results, f, indent=2)
+                            print(f"\nResults saved to {args.output}")
+            except Exception as e:
+                print(f"{Fore.RED}Error scanning {subdomain}: {str(e)}{Style.RESET_ALL}")
+                continue
+            
+    except FileNotFoundError:
+        print(f"\033[91mError: File '{filename}' not found\033[0m")
+    except Exception as e:
+        print(f"\033[91mError reading file: {str(e)}\033[0m")
+
 def main():
     args = parse_arguments()
     
-    try:
-        if args.ignore_ssl:
-            # Disable SSL warnings and certificate verification
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            requests.packages.urllib3.disable_warnings()
+    if args.file:
+        scan_from_file(args.file)
+    else:
+        try:
+            if args.ignore_ssl:
+                # Disable SSL warnings and certificate verification
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                requests.packages.urllib3.disable_warnings()
             
-        # If specific technology is specified, only scan for that
-        if args.technology:
-            print(f"\nScanning specifically for {args.technology}...")
-            scan_output = run_nuclei_scan(args.url, args.technology)
-            
-            if scan_output:
-                findings = parse_nuclei_output(scan_output)
-                if findings:
-                    print(f"\nFindings for {args.technology}:")
-                    for finding in findings:
-                        try:
-                            severity = finding.get('severity', 'Unknown').upper()
-                            name = finding.get('name', 'Unknown')
-                            template = finding.get('template', 'Unknown')
-                            description = finding.get('description', '')
-                            matched_at = finding.get('matched_at', '')
-                            
-                            print(f"\n  [{severity}] {name}")
-                            print(f"  Template: {template}")
-                            if description:
-                                print(f"  Description: {description}")
-                            if matched_at:
-                                print(f"  Matched at: {matched_at}")
-                            
-                            # Enrich vulnerability data
-                            enriched_finding = enrich_vulnerability_data(finding)
-                            
-                            # Display additional information if available
-                            if enriched_finding['exploit_db']:
-                                print(f"\n  {Fore.RED}Available Exploits:{Style.RESET_ALL}")
-                                for exploit in enriched_finding['exploit_db']:
-                                    print(f"    - {exploit['title']}")
-                                    print(f"      URL: {exploit['url']}")
-                        except Exception as e:
-                            print(f"{Fore.RED}Error processing finding: {str(e)}{Style.RESET_ALL}")
-                else:
-                    print(f"{Fore.GREEN}No vulnerabilities found for {args.technology}{Style.RESET_ALL}")
-            return  # Exit after single technology scan
-            
-        # Regular technology detection and scanning mode
-        elif not args.no_tech:
-            # Initialize Wappalyzer
-            wappalyzer = Wappalyzer.latest()
-            webpage = WebPage.new_from_url(
-                args.url,
-                verify=not args.ignore_ssl
-            )
-            
-            # Analyze the webpage
-            technologies = wappalyzer.analyze_with_versions_and_categories(webpage)
-            
-            # Pretty print the results and run Nuclei scans
-            scan_results = {}
-            for tech_name, tech_info in technologies.items():
-                print(f"\n{tech_name}:")
-                if 'versions' in tech_info:
-                    versions = tech_info['versions']
-                    print(f"  Versions: {Fore.YELLOW}{', '.join(versions)}{Style.RESET_ALL}")
-                    scan_output = run_nuclei_scan(args.url, tech_name, versions[0] if versions else None)
-                else:
-                    scan_output = run_nuclei_scan(args.url, tech_name)
-                    
+            # If specific technology is specified, only scan for that
+            if args.technology:
+                print(f"\nScanning specifically for {args.technology}...")
+                scan_output = run_nuclei_scan(args.url, args.technology)
+                
                 if scan_output:
                     findings = parse_nuclei_output(scan_output)
                     if findings:
-                        scan_results[tech_name] = []
-                        print(f"\nFindings for {tech_name}:")
+                        print(f"\nFindings for {args.technology}:")
                         for finding in findings:
                             try:
                                 severity = finding.get('severity', 'Unknown').upper()
@@ -473,47 +577,105 @@ def main():
                                 
                                 # Enrich vulnerability data
                                 enriched_finding = enrich_vulnerability_data(finding)
-                                scan_results[tech_name].append(enriched_finding)
                                 
-                                # Display additional information
+                                # Display additional information if available
                                 if enriched_finding['exploit_db']:
                                     print(f"\n  {Fore.RED}Available Exploits:{Style.RESET_ALL}")
                                     for exploit in enriched_finding['exploit_db']:
                                         print(f"    - {exploit['title']}")
                                         print(f"      URL: {exploit['url']}")
-                                
-                                if enriched_finding['metasploit']:
-                                    print(f"\n  {Fore.RED}Metasploit Modules:{Style.RESET_ALL}")
-                                    for module in enriched_finding['metasploit']:
-                                        print(f"    - {module['name']}")
-                                        print(f"      Path: {module['path']}")
-                                
-                                if enriched_finding['vulners']:
-                                    vuln_info = enriched_finding['vulners']
-                                    print(f"\n  {Fore.YELLOW}Additional Information:{Style.RESET_ALL}")
-                                    print(f"    CVSS Score: {vuln_info.get('cvss_score', 'N/A')}")
-                                    print(f"    Published: {vuln_info.get('published', 'N/A')}")
-                                    if vuln_info.get('references', []):
-                                        print("    References:")
-                                        for ref in vuln_info['references'][:3]:  # Show first 3 references
-                                            print(f"      - {ref}")
-                                            
                             except Exception as e:
                                 print(f"{Fore.RED}Error processing finding: {str(e)}{Style.RESET_ALL}")
-                                continue
                     else:
-                        print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
-                else:
-                    print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
-        
-        # Save results to file if specified
-        if args.output and scan_results:
-            with open(args.output, 'w') as f:
-                json.dump(scan_results, f, indent=2)
-                print(f"\nResults saved to {args.output}")
+                        print(f"{Fore.GREEN}No vulnerabilities found for {args.technology}{Style.RESET_ALL}")
+                return  # Exit after single technology scan
+            
+            # Regular technology detection and scanning mode
+            elif not args.no_tech:
+                # Initialize Wappalyzer
+                wappalyzer = Wappalyzer.latest()
+                webpage = WebPage.new_from_url(
+                    args.url,
+                    verify=not args.ignore_ssl
+                )
                 
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
+                # Analyze the webpage
+                technologies = wappalyzer.analyze_with_versions_and_categories(webpage)
+                
+                # Pretty print the results and run Nuclei scans
+                scan_results = {}
+                for tech_name, tech_info in technologies.items():
+                    print(f"\n{tech_name}:")
+                    if 'versions' in tech_info:
+                        versions = tech_info['versions']
+                        print(f"  Versions: {Fore.YELLOW}{', '.join(versions)}{Style.RESET_ALL}")
+                        scan_output = run_nuclei_scan(args.url, tech_name, versions[0] if versions else None)
+                    else:
+                        scan_output = run_nuclei_scan(args.url, tech_name)
+                    
+                    if scan_output:
+                        findings = parse_nuclei_output(scan_output)
+                        if findings:
+                            scan_results[tech_name] = []
+                            print(f"\nFindings for {tech_name}:")
+                            for finding in findings:
+                                try:
+                                    severity = finding.get('severity', 'Unknown').upper()
+                                    name = finding.get('name', 'Unknown')
+                                    template = finding.get('template', 'Unknown')
+                                    description = finding.get('description', '')
+                                    matched_at = finding.get('matched_at', '')
+                                    
+                                    print(f"\n  [{severity}] {name}")
+                                    print(f"  Template: {template}")
+                                    if description:
+                                        print(f"  Description: {description}")
+                                    if matched_at:
+                                        print(f"  Matched at: {matched_at}")
+                                    
+                                    # Enrich vulnerability data
+                                    enriched_finding = enrich_vulnerability_data(finding)
+                                    scan_results[tech_name].append(enriched_finding)
+                                    
+                                    # Display additional information
+                                    if enriched_finding['exploit_db']:
+                                        print(f"\n  {Fore.RED}Available Exploits:{Style.RESET_ALL}")
+                                        for exploit in enriched_finding['exploit_db']:
+                                            print(f"    - {exploit['title']}")
+                                            print(f"      URL: {exploit['url']}")
+                                    
+                                    if enriched_finding['metasploit']:
+                                        print(f"\n  {Fore.RED}Metasploit Modules:{Style.RESET_ALL}")
+                                        for module in enriched_finding['metasploit']:
+                                            print(f"    - {module['name']}")
+                                            print(f"      Path: {module['path']}")
+                                    
+                                    if enriched_finding['vulners']:
+                                        vuln_info = enriched_finding['vulners']
+                                        print(f"\n  {Fore.YELLOW}Additional Information:{Style.RESET_ALL}")
+                                        print(f"    CVSS Score: {vuln_info.get('cvss_score', 'N/A')}")
+                                        print(f"    Published: {vuln_info.get('published', 'N/A')}")
+                                        if vuln_info.get('references', []):
+                                            print("    References:")
+                                            for ref in vuln_info['references'][:3]:  # Show first 3 references
+                                                print(f"      - {ref}")
+                                            
+                                except Exception as e:
+                                    print(f"{Fore.RED}Error processing finding: {str(e)}{Style.RESET_ALL}")
+                                    continue
+                            else:
+                                print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
+                        else:
+                            print(f"{Fore.GREEN}  No vulnerabilities found for {tech_name}{Style.RESET_ALL}")
+                    
+                # Save results to file if specified
+                if args.output and scan_results:
+                    with open(args.output, 'w') as f:
+                        json.dump(scan_results, f, indent=2)
+                        print(f"\nResults saved to {args.output}")
+                
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
     print(f"{Fore.MAGENTA}{banner}{Style.RESET_ALL}")

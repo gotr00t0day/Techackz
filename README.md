@@ -58,17 +58,24 @@ chmod +x install.sh
 
 ## 📖 Usage
 ```bash
-usage: techackz.py [-h] -u URL [-o OUTPUT] [-s {info,low,medium,high,critical}] [--no-tech]
+usage: techackz.py [-h] [-u URL | -f FILE] [-o OUTPUT]
+                   [-s {info,low,medium,high,critical}] [--no-tech] [--ignore-ssl]
+                   [-t TECHNOLOGY] [-d]
 
 Detect web technologies and run targeted Nuclei scans
 
 options:
   -h, --help            show this help message and exit
   -u, --url URL         Target URL to scan
+  -f, --file FILE       File containing list of subdomains to scan
   -o, --output OUTPUT   Output file to save results (JSON format)
   -s, --severity {info,low,medium,high,critical}
                         Minimum severity level to report
-  --no-tech             Skip technology detection and run all Nuclei scan
+  --no-tech             Skip technology detection and run all Nuclei scans
+  --ignore-ssl          Ignore SSL certificate verification
+  -t, --technology TECHNOLOGY
+                        Specify technology to scan for (e.g., "wordpress", "nginx")
+  -d, --debug           Enable debug mode         Skip technology detection and run all Nuclei scan
 ```
 
 ## ⚠️ Disclaimer
