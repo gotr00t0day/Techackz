@@ -346,6 +346,57 @@ def check_metasploit(cve):
         print(f"{Fore.RED}Error checking Metasploit: {str(e)}{Style.RESET_ALL}")
     return None
 
+def check_osv(tech_name, version=None):
+    """
+    Query the OSV database for vulnerabilities in the specified technology
+    """
+    osv_api_url = "https://api.osv.dev/v1/query"
+    
+    try:
+        # Prepare the query payload
+        query = {
+            "package": {
+                "name": tech_name.lower(),
+            }
+        }
+        
+        if version:
+            query["version"] = version
+        
+        response = requests.post(osv_api_url, json=query)
+        if response.status_code == 200:
+            vulns = response.json().get('vulns', [])
+            if not vulns:
+                return None
+                
+            formatted_vulns = []
+            for vuln in vulns:
+                affected_versions = []
+                for affected in vuln.get('affected', []):
+                    for range_event in affected.get('ranges', []):
+                        for range_item in range_event.get('events', []):
+                            affected_versions.append(range_item)
+                
+                formatted_vuln = {
+                    'id': vuln.get('id'),
+                    'summary': vuln.get('summary'),
+                    'details': vuln.get('details'),
+                    'severity': next((ref.get('severity') for ref in vuln.get('references', []) 
+                                   if ref.get('type') == 'SEVERITY'), 'UNKNOWN'),
+                    'affected_versions': affected_versions,
+                    'published': vuln.get('published'),
+                    'modified': vuln.get('modified'),
+                    'references': [ref.get('url') for ref in vuln.get('references', []) 
+                                 if ref.get('url')]
+                }
+                formatted_vulns.append(formatted_vuln)
+            
+            return formatted_vulns
+            
+    except Exception as e:
+        print(f"{Fore.RED}Error checking OSV database: {str(e)}{Style.RESET_ALL}")
+    return None
+
 def enrich_vulnerability_data(finding):
     """
     Enrich vulnerability data with information from multiple sources
@@ -354,10 +405,25 @@ def enrich_vulnerability_data(finding):
         'original': finding,
         'exploit_db': None,
         'vulners': None,
-        'metasploit': None
+        'metasploit': None,
+        'osv': None  # Add OSV field
     }
     
     try:
+        # Extract technology and version information from the finding
+        tech_pattern = r'(?:running|using|version)\s+([a-zA-Z0-9._-]+)(?:\s+version\s+([0-9.]+))?'
+        tech_match = re.search(tech_pattern, finding.get('description', ''))
+        
+        if tech_match:
+            tech_name = tech_match.group(1)
+            version = tech_match.group(2) if tech_match.group(2) else None
+            
+            # Check OSV database
+            osv_results = check_osv(tech_name, version)
+            if osv_results:
+                enriched_data['osv'] = osv_results
+                print(f"{Fore.YELLOW}Found {len(osv_results)} vulnerabilities in OSV database{Style.RESET_ALL}")
+        
         # Extract CVE from finding
         cve_pattern = r'CVE-\d{4}-\d{4,7}'
         name = finding.get('name', '')
@@ -385,6 +451,22 @@ def enrich_vulnerability_data(finding):
                 if msf_modules:
                     enriched_data['metasploit'] = msf_modules
                     print(f"{Fore.YELLOW}Found {len(msf_modules)} Metasploit modules{Style.RESET_ALL}")
+        
+        # Display OSV findings if available
+        if enriched_data['osv']:
+            print(f"\n  {Fore.YELLOW}OSV Database Findings:{Style.RESET_ALL}")
+            for vuln in enriched_data['osv']:
+                print(f"    - ID: {vuln['id']}")
+                print(f"      Severity: {vuln['severity']}")
+                print(f"      Summary: {vuln['summary']}")
+                if vuln['affected_versions']:
+                    print(f"      Affected Versions: {', '.join(vuln['affected_versions'])}")
+                if vuln['references']:
+                    print("      References:")
+                    for ref in vuln['references'][:3]:  # Show first 3 references
+                        print(f"        - {ref}")
+                print()
+                
     except Exception as e:
         print(f"{Fore.RED}Error enriching vulnerability data: {str(e)}{Style.RESET_ALL}")
     
