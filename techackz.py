@@ -603,100 +603,53 @@ async def enrich_vulnerability_data(session, finding, tech_name=None, tech_versi
     return enriched_data
 
 
-def print_enriched_finding(finding_data, min_severity_level):
-    """Prints the enriched finding details respecting severity level."""
-    original = finding_data['original']
-    severity = original.get('severity', 'unknown')
-    severity_num = SEVERITY_LEVELS.get(severity, -1)
+def print_nuclei_finding(finding, min_severity_level):
+    """Prints the core Nuclei finding details respecting severity level."""
+    if not finding:
+        log.warning("Attempted to print empty finding data.")
+        return
 
-    if severity_num < min_severity_level:
-        log.debug(f"Skipping finding '{original.get('name')}' due to severity '{severity}' < minimum '{min_severity_level}'")
+    severity = finding.get('severity', 'unknown')
+    original_severity_num = SEVERITY_LEVELS.get(severity, -1)
+
+    if original_severity_num < min_severity_level:
+        log.debug(f"Skipping finding '{finding.get('name')}' due to severity {severity} < minimum {min_severity_level}")
         return # Skip printing if below threshold
 
-    # --- Print Core Finding ---
+    # --- Print Core Finding --- (Removed enrichment logic)
     severity_upper = severity.upper()
-    color = Fore.GREEN
-    if severity in ['medium', 'high']: color = Fore.YELLOW
+    color = Fore.WHITE # Default
+    if severity == 'low': color = Fore.GREEN
+    if severity == 'medium': color = Fore.YELLOW
+    if severity == 'high': color = Fore.LIGHTRED_EX
     if severity == 'critical': color = Fore.RED
-    print(f"\n{color}[{severity_upper}]{Style.RESET_ALL} {Fore.CYAN}{original.get('name', 'Unknown')}{Style.RESET_ALL}")
-    print(f"  Template: {original.get('template', 'Unknown')}")
-    if original.get('description'):
-        print(f"  Description: {original['description']}")
-    if original.get('matched_at'):
-        print(f"  Matched at: {Style.BRIGHT}{original['matched_at']}{Style.RESET_ALL}")
-    if original.get('extracted_results'):
-        print(f"  Extracted Results: {Fore.MAGENTA}{original['extracted_results']}{Style.RESET_ALL}")
-    if original.get('curl_command'):
-         print(f"  Curl Command: {Fore.LIGHTBLACK_EX}{original['curl_command']}{Style.RESET_ALL}")
 
-
-    # --- Print Enrichment Data ---
-    cves_found = list(finding_data['exploits'].keys()) # Get CVEs for which we have enrichment
-
-    if finding_data.get('osv_vulns'):
-        print(f"\n  {Fore.YELLOW}OSV Database Findings:{Style.RESET_ALL}")
-        for vuln in finding_data['osv_vulns']:
-            print(f"    - ID: {vuln['id']} (Score: {vuln.get('severity_score', 'N/A')})")
-            print(f"      Summary: {vuln['summary']}")
-            # Optionally print affected packages/versions/references from OSV
-            if vuln.get('references'):
-                 print(f"      References: {', '.join(vuln['references'][:2])}...") # Show a few refs
-            print()
-
-
-    if finding_data.get('nvd_cves'):
-         print(f"\n  {Fore.YELLOW}NVD CVE Check Results:{Style.RESET_ALL}")
-         for cve_info in finding_data['nvd_cves']:
-             print(f"    - {cve_info['id']} (Score: {cve_info['score']}, Severity: {cve_info['severity']})")
-             print(f"      Description: {cve_info['description'][:100]}...") # Truncate description
-             cves_found.append(cve_info['id']) # Ensure NVD CVEs are considered for exploit printing
-
-
-    unique_cves = sorted(list(set(cves_found)))
-
-    for cve_id in unique_cves:
-         printed_cve_header = False
-         def print_cve_header():
-             nonlocal printed_cve_header
-             if not printed_cve_header:
-                 print(f"\n  --- Enrichment for {Fore.CYAN}{cve_id}{Style.RESET_ALL} ---")
-                 printed_cve_header = True
-
-         if finding_data['exploits'].get(cve_id):
-             print_cve_header()
-             print(f"  {Fore.RED}ExploitDB:{Style.RESET_ALL}")
-             for exploit in finding_data['exploits'][cve_id]:
-                 print(f"    - [{exploit.get('edb_id','N/A')}] {exploit.get('title', 'N/A')}")
-                 print(f"      URL: {exploit.get('url', 'N/A')}")
-
-         if finding_data['metasploit'].get(cve_id):
-             print_cve_header()
-             print(f"  {Fore.RED}Metasploit Modules:{Style.RESET_ALL}")
-             for module in finding_data['metasploit'][cve_id]:
-                 print(f"    - {module.get('name', 'N/A')} (Rank: {module.get('rank', 'N/A')})")
-                 print(f"      Path: {module.get('path', 'N/A')}")
-
-         if finding_data['vulners'].get(cve_id):
-             print_cve_header()
-             vuln_info = finding_data['vulners'][cve_id]
-             print(f"  {Fore.YELLOW}Vulners Info:{Style.RESET_ALL}")
-             print(f"    Score: {vuln_info.get('cvss_score', 'N/A')} ({vuln_info.get('severity', 'N/A')})")
-             print(f"    Title: {vuln_info.get('title', 'N/A')}")
-             if vuln_info.get('references'):
-                 print(f"    References: {', '.join(vuln_info['references'][:2])}...") # Show a few refs
-             if vuln_info.get('exploit_links'):
-                  print(f"    Exploit Links: {', '.join(vuln_info['exploit_links'])}")
+    print(f"\n{color}[{severity_upper}]{Style.RESET_ALL} {Fore.CYAN}{finding.get('name', 'Unknown')}{Style.RESET_ALL} on {finding.get('host', '?')}")
+    print(f"  Template: {finding.get('template', 'Unknown')}")
+    if finding.get('tags'):
+        print(f"  Tags: {Fore.LIGHTBLACK_EX}{finding['tags']}{Style.RESET_ALL}")
+    if finding.get('description'):
+        print(f"  Description: {finding['description']}")
+    if finding.get('matched_at'):
+        print(f"  Matched at: {Style.BRIGHT}{finding['matched_at']}{Style.RESET_ALL}")
+    if finding.get('extracted_results'):
+        print(f"  Extracted Results: {Fore.MAGENTA}{finding['extracted_results']}{Style.RESET_ALL}")
+    if finding.get('reference'):
+         print(f"  References: {Fore.BLUE}{finding['reference']}{Style.RESET_ALL}")
+    if finding.get('curl_command'):
+         print(f"  Curl Command: {Fore.LIGHTBLACK_EX}{finding['curl_command']}{Style.RESET_ALL}")
 
 
 
 async def process_url(url, session, args, cve_cache):
-    """Processes a single URL: Detect tech, run Nuclei, enrich results."""
+    """Processes a single URL: Detect tech, run Nuclei, print findings."""
     log.info(f"Processing URL: {url}")
-    results = {'url': url, 'technologies': {}, 'errors': []}
+    # Adjusted results structure to store raw findings directly
+    results = {'url': url, 'technologies': {}, 'findings': [], 'errors': []}
     min_severity_level = SEVERITY_LEVELS.get(args.severity, 0)
 
     try:
-        # --- Technology Detection ---
+        # --- Technology Detection (Optional) ---
         detected_technologies = {}
         if not args.no_tech and not args.technology: # Skip Wappalyzer if specific tech or no-tech flag
             try:
@@ -731,90 +684,93 @@ async def process_url(url, session, args, cve_cache):
 
         # --- Nuclei Scanning ---
         nuclei_tasks = []
-        tech_scan_map = {} # To map task index back to tech name
+        tech_scan_map = {} # To map task index back to tech name/info
 
         if args.technology:
              # Scan only for the specified technology
-             log.info(f"Running Nuclei specifically for technology: {args.technology}")
-             task = asyncio.create_task(run_nuclei_scan_async(url, args.technology))
+             tech_name_arg = args.technology
+             log.info(f"Running Nuclei specifically for technology: {tech_name_arg}")
+             # We don't have version info here, Nuclei will match templates broadly for the tech
+             task = asyncio.create_task(run_nuclei_scan_async(url, tech_name_arg))
              nuclei_tasks.append(task)
-             tech_scan_map[0] = args.technology # Map index 0 to this tech
-        elif args.no_tech:
-            # Run broad Nuclei scan if --no-tech is specified
-            log.info(f"Running broad Nuclei scan (no technology focus) for {url}")
+             # FIX: Store a dictionary, not just the string
+             tech_scan_map[0] = {"name": tech_name_arg, "version": None}
+        elif args.no_tech or not detected_technologies:
+            # Run broad Nuclei scan if --no-tech, or if Wappalyzer failed
+            scan_reason = "--no-tech specified" if args.no_tech else "Wappalyzer failed"
+            log.info(f"Running broad Nuclei scan ({scan_reason}) for {url}")
             task = asyncio.create_task(run_nuclei_scan_async(url))
             nuclei_tasks.append(task)
-            tech_scan_map[0] = "Broad Scan"
+            # FIX: Store a dictionary, not just the string
+            tech_scan_map[0] = {"name": "Broad Scan", "version": None}
         else:
             # Scan for each detected technology concurrently
             if detected_technologies:
                  log.info(f"Running Nuclei scans for {len(detected_technologies)} detected technologies...")
-                 for i, (tech_name, tech_info) in enumerate(detected_technologies.items()):
+                 i = 0
+                 for tech_name, tech_info in detected_technologies.items():
                     task = asyncio.create_task(run_nuclei_scan_async(url, tech_name, tech_info.get('version')))
                     nuclei_tasks.append(task)
-                    tech_scan_map[i] = tech_name # Map index i to this tech name
+                    # FIX: Store a dictionary, not just the string
+                    tech_scan_map[i] = {"name": tech_name, "version": tech_info.get('version')}
+                    i += 1
             else:
-                 log.info("No technologies detected and --no-tech not specified. Running broad Nuclei scan.")
+                 log.info("No technologies detected by Wappalyzer. Running broad Nuclei scan.")
                  task = asyncio.create_task(run_nuclei_scan_async(url)) # Default broad scan
                  nuclei_tasks.append(task)
-                 tech_scan_map[0] = "Broad Scan"
+                 # FIX: Store a dictionary, not just the string
+                 tech_scan_map[0] = {"name": "Broad Scan", "version": None}
 
-
+        # --- Gather Nuclei Scan Results ---
         nuclei_outputs = await asyncio.gather(*nuclei_tasks, return_exceptions=True)
 
-        # --- Process and Enrich Nuclei Results ---
-        all_findings_enriched = []
-        enrichment_tasks = []
+        # --- Process and Print Nuclei Results (Enrichment Removed) ---
+        # Removed: all_findings_enriched = []
+        # Removed: enrichment_tasks = []
 
-        for i, output in enumerate(nuclei_outputs):
-            tech_name = tech_scan_map.get(i) # Get tech name corresponding to this output
-            tech_info = detected_technologies.get(tech_name, {}) if tech_name and tech_name != "Broad Scan" else {}
-            tech_version = tech_info.get('version')
+        for i, output_result in enumerate(nuclei_outputs):
+            # Now scan_info will be the dictionary correctly
+            scan_info = tech_scan_map.get(i, {"name": "Unknown Scan", "version": None})
+            scan_tech_name = scan_info["name"]
+            # Removed: scan_tech_version = scan_info["version"]
 
-            if isinstance(output, Exception):
-                log.error(f"Nuclei scan task failed for {tech_name or 'Broad Scan'} on {url}: {output}")
-                results['errors'].append(f"Nuclei failed for {tech_name or 'Broad Scan'}: {output}")
+            if isinstance(output_result, Exception):
+                log.error(f"Nuclei scan task failed for {scan_tech_name} on {url}: {output_result}")
+                results['errors'].append(f"Nuclei failed for {scan_tech_name}: {output_result}")
                 continue
-            if not output:
-                log.info(f"No Nuclei findings for {tech_name or 'Broad Scan'} on {url}")
+            if not output_result:
+                log.info(f"No Nuclei findings for {scan_tech_name} on {url}")
                 continue
 
-            findings = parse_nuclei_output(output)
-            log.info(f"Found {len(findings)} Nuclei findings for {tech_name or 'Broad Scan'} on {url}")
+            findings = parse_nuclei_output(output_result)
+            log.info(f"Parsed {len(findings)} Nuclei findings for {scan_tech_name} on {url}")
 
             if findings:
-                 print(f"\n--- Findings for {Fore.CYAN}{tech_name or 'Broad Scan'}{Style.RESET_ALL} on {url} ---")
-                 # Schedule enrichment tasks for all findings of this tech
+                 print(f"\n--- Findings for {Fore.CYAN}{scan_tech_name}{Style.RESET_ALL} on {url} ---")
+                 # Process and print findings directly, store raw findings
                  for finding in findings:
-                      # Pass tech_name/version from Wappalyzer if available for better context
-                      current_tech_name = tech_name if tech_name != "Broad Scan" else None
-                      task = asyncio.create_task(
-                          enrich_vulnerability_data(session, finding, current_tech_name, tech_version, cve_cache)
-                      )
-                      enrichment_tasks.append(task)
+                     # Print the finding if severity matches
+                     try:
+                        print_nuclei_finding(finding, min_severity_level)
+                     except Exception as print_err:
+                         log.error(f"Error printing finding details: {print_err}")
 
+                     # Store the raw finding in the results
+                     results['findings'].append(finding)
 
-        # --- Gather Enrichment Results ---
-        if enrichment_tasks:
-            enriched_results = await asyncio.gather(*enrichment_tasks, return_exceptions=True)
-            log.info(f"Finished enrichment for {len(enriched_results)} findings for {url}")
-            for enriched_data in enriched_results:
-                 if isinstance(enriched_data, Exception):
-                      log.error(f"Enrichment task failed for {url}: {enriched_data}")
-                      results['errors'].append(f"Enrichment failed: {enriched_data}")
-                      continue
-                 if enriched_data:
-                    all_findings_enriched.append(enriched_data)
-                    # Print results immediately after enrichment
-                    print_enriched_finding(enriched_data, min_severity_level)
+                 # Removed: Scheduling enrichment tasks
 
+        # --- Removed: Gather Enrichment Results --- 
 
-        results['findings'] = all_findings_enriched
-
+    except FileNotFoundError: # Catch if run_nuclei_scan_async raises it
+        log.critical("Nuclei command not found during URL processing. Aborting.")
+        results['errors'].append("Nuclei not found")
+        raise
     except Exception as e:
         log.exception(f"Unhandled exception processing URL {url}: {e}") # Log full traceback
         results['errors'].append(f"General error: {e}")
 
+    log.info(f"Finished processing URL: {url}. Findings: {len(results['findings'])}, Errors: {len(results['errors'])}")
     return results
 
 
