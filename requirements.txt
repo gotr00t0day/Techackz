@@ -1,13 +1,13 @@
-Wappalyzer>=2.2.1
-colorama>=0.4.6
-requests>=2.31.0
-packaging>=23.0
+Wappalyzer
+colorama
+requests
+packaging
 python-dateutil
 urllib3
-beautifulsoup4>=4.12.2
+beautifulsoup4
 python-dotenv
 argparse
-aiohttp>=3.9.0  # For async HTTP requests
-aiodns>=3.0.0  # Optional speedup for aiohttp
-ratelimit>=2.2.1 # For potential API rate limiting (optional enhancement)
-tqdm>=4.60.0 # For progress bar
+aiohttp
+aiodns
+ratelimit
+tqdm
