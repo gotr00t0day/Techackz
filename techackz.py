@@ -28,6 +28,7 @@ EXPLOITDB_SEARCH_URL = "https://www.exploit-db.com/search"
 VULNERS_API_URL = "https://vulners.com/api/v3/search/id/"
 METASPLOIT_MODULES_URL = "https://raw.githubusercontent.com/rapid7/metasploit-framework/master/db/modules_metadata_base.json"
 OSV_API_URL = "https://api.osv.dev/v1/query"
+BUILTWITH_API_URL = "https://api.builtwith.com/v20/api.json"
 
 # Severity mapping for filtering
 SEVERITY_LEVELS = {
@@ -36,6 +37,303 @@ SEVERITY_LEVELS = {
     "medium": 2,
     "high": 3,
     "critical": 4
+}
+
+# Technology fingerprints for custom detection
+CUSTOM_TECH_PATTERNS = {
+    # CMS Detection
+    'wordpress': {
+        'headers': {'x-powered-by': r'WordPress', 'server': r'WordPress'},
+        'html': [r'/wp-content/', r'/wp-includes/', r'wp-json', r'<meta name="generator" content="WordPress'],
+        'cookies': ['wordpress_', 'wp-'],
+        'urls': ['/wp-admin/', '/wp-login.php', '/xmlrpc.php']
+    },
+    'drupal': {
+        'headers': {'x-drupal-cache': r'.*', 'x-generator': r'Drupal'},
+        'html': [r'Drupal\.settings', r'/sites/default/files/', r'<meta name="generator" content="Drupal'],
+        'cookies': ['SESS', 'SSESS'],
+        'urls': ['/node/', '/user/login', '/admin/']
+    },
+    'joomla': {
+        'headers': {'x-content-encoded-by': r'Joomla'},
+        'html': [r'/media/jui/', r'/administrator/', r'<meta name="generator" content="Joomla'],
+        'cookies': ['joomla_'],
+        'urls': ['/administrator/', '/component/']
+    },
+    'shopify': {
+        'headers': {'server': r'Shopify', 'x-shopid': r'.*'},
+        'html': [r'Shopify\.theme', r'myshopify\.com', r'cdn\.shopify\.com'],
+        'cookies': ['_shopify_'],
+        'urls': ['/cart', '/checkout']
+    },
+    'magento': {
+        'headers': {'x-magento-tags': r'.*'},
+        'html': [r'/skin/frontend/', r'Mage\.Cookies', r'/js/mage/'],
+        'cookies': ['frontend'],
+        'urls': ['/customer/account/', '/checkout/']
+    },
+    'prestashop': {
+        'headers': {},
+        'html': [r'prestashop', r'/modules/'],
+        'cookies': ['PrestaShop'],
+        'urls': ['/admin/', '/modules/']
+    },
+    'opencart': {
+        'headers': {},
+        'html': [r'catalog/view/theme/', r'OpenCart'],
+        'cookies': ['OCSESSID'],
+        'urls': ['/admin/', '/catalog/']
+    },
+    # Web Servers
+    'apache': {
+        'headers': {'server': r'Apache'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'nginx': {
+        'headers': {'server': r'nginx'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'iis': {
+        'headers': {'server': r'Microsoft-IIS'},
+        'html': [],
+        'cookies': ['ASPSESSIONID'],
+        'urls': []
+    },
+    'lighttpd': {
+        'headers': {'server': r'lighttpd'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'caddy': {
+        'headers': {'server': r'Caddy'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    # Frameworks
+    'django': {
+        'headers': {'x-frame-options': r'SAMEORIGIN'},
+        'html': [r'csrfmiddlewaretoken'],
+        'cookies': ['csrftoken', 'sessionid'],
+        'urls': ['/admin/', '/static/admin/']
+    },
+    'flask': {
+        'headers': {'server': r'Werkzeug'},
+        'html': [],
+        'cookies': ['session'],
+        'urls': []
+    },
+    'laravel': {
+        'headers': {'x-powered-by': r'PHP'},
+        'html': [r'laravel_session', r'_token'],
+        'cookies': ['laravel_session'],
+        'urls': []
+    },
+    'rails': {
+        'headers': {'x-powered-by': r'Phusion Passenger'},
+        'html': [r'csrf-token', r'authenticity_token'],
+        'cookies': ['_session_id'],
+        'urls': []
+    },
+    'express': {
+        'headers': {'x-powered-by': r'Express'},
+        'html': [],
+        'cookies': ['connect.sid'],
+        'urls': []
+    },
+    'spring': {
+        'headers': {},
+        'html': [r'jsessionid', r'spring'],
+        'cookies': ['JSESSIONID'],
+        'urls': []
+    },
+    'asp.net': {
+        'headers': {'x-aspnet-version': r'.*', 'x-powered-by': r'ASP\.NET'},
+        'html': [r'__VIEWSTATE', r'__EVENTVALIDATION'],
+        'cookies': ['ASP.NET_SessionId'],
+        'urls': []
+    },
+    # Programming Languages
+    'php': {
+        'headers': {'x-powered-by': r'PHP'},
+        'html': [],
+        'cookies': ['PHPSESSID'],
+        'urls': []
+    },
+    'nodejs': {
+        'headers': {'x-powered-by': r'Node\.js'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'python': {
+        'headers': {'server': r'Python'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    # CDNs and Services
+    'cloudflare': {
+        'headers': {'cf-ray': r'.*', 'server': r'cloudflare'},
+        'html': [],
+        'cookies': ['__cfduid', 'cf_clearance'],
+        'urls': []
+    },
+    'aws': {
+        'headers': {'x-amz-cf-id': r'.*', 'server': r'AmazonS3'},
+        'html': [r'amazonaws\.com'],
+        'cookies': [],
+        'urls': []
+    },
+    'fastly': {
+        'headers': {'fastly-debug-digest': r'.*'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'maxcdn': {
+        'headers': {},
+        'html': [r'maxcdn\.com'],
+        'cookies': [],
+        'urls': []
+    },
+    # Security & WAF
+    'cloudfront': {
+        'headers': {'x-amz-cf-id': r'.*'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'incapsula': {
+        'headers': {'x-iinfo': r'.*'},
+        'html': [],
+        'cookies': ['incap_ses_', 'nlbi_'],
+        'urls': []
+    },
+    'sucuri': {
+        'headers': {'x-sucuri-id': r'.*'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    'akamai': {
+        'headers': {'akamai-origin-hop': r'.*'},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    # Load Balancers
+    'f5-big-ip': {
+        'headers': {},
+        'html': [],
+        'cookies': ['BIGipServer', 'LastMRH_Session'],
+        'urls': []
+    },
+    'haproxy': {
+        'headers': {},
+        'html': [],
+        'cookies': [],
+        'urls': []
+    },
+    # Databases (if exposed)
+    'mysql': {
+        'headers': {},
+        'html': [r'MySQL'],
+        'cookies': [],
+        'urls': []
+    },
+    'postgresql': {
+        'headers': {},
+        'html': [r'PostgreSQL'],
+        'cookies': [],
+        'urls': []
+    },
+    'mongodb': {
+        'headers': {},
+        'html': [r'MongoDB'],
+        'cookies': [],
+        'urls': []
+    },
+    'redis': {
+        'headers': {},
+        'html': [r'Redis'],
+        'cookies': [],
+        'urls': []
+    },
+    # Development Tools
+    'phpmyadmin': {
+        'headers': {},
+        'html': [r'phpMyAdmin', r'pma_username'],
+        'cookies': ['phpMyAdmin', 'pma_'],
+        'urls': ['/phpmyadmin/', '/pma/']
+    },
+    'adminer': {
+        'headers': {},
+        'html': [r'Adminer'],
+        'cookies': [],
+        'urls': ['/adminer.php']
+    },
+    'grafana': {
+        'headers': {},
+        'html': [r'Grafana'],
+        'cookies': ['grafana_session'],
+        'urls': ['/login']
+    },
+    'kibana': {
+        'headers': {},
+        'html': [r'Kibana'],
+        'cookies': [],
+        'urls': ['/app/kibana']
+    },
+    # Analytics & Tracking
+    'google-analytics': {
+        'headers': {},
+        'html': [r'google-analytics\.com', r'gtag\(', r'ga\('],
+        'cookies': ['_ga', '_gid'],
+        'urls': []
+    },
+    'google-tag-manager': {
+        'headers': {},
+        'html': [r'googletagmanager\.com'],
+        'cookies': [],
+        'urls': []
+    },
+    # JavaScript Libraries/Frameworks
+    'jquery': {
+        'headers': {},
+        'html': [r'jquery', r'jQuery'],
+        'cookies': [],
+        'urls': []
+    },
+    'react': {
+        'headers': {},
+        'html': [r'react', r'__REACT_DEVTOOLS_GLOBAL_HOOK__'],
+        'cookies': [],
+        'urls': []
+    },
+    'vue': {
+        'headers': {},
+        'html': [r'Vue\.js', r'vue'],
+        'cookies': [],
+        'urls': []
+    },
+    'angular': {
+        'headers': {},
+        'html': [r'angular', r'ng-'],
+        'cookies': [],
+        'urls': []
+    },
+    'bootstrap': {
+        'headers': {},
+        'html': [r'bootstrap', r'btn-'],
+        'cookies': [],
+        'urls': []
+    }
 }
 
 # Suppress InsecureRequestWarning if SSL verification is disabled
@@ -54,7 +352,7 @@ banner = f"""
   ░         ░   ░         ░  ░░ ░  ░   ▒   ░        ░ ░░ ░ ░ ░ ░ ░ ░
             ░  ░░ ░       ░  ░  ░      ░  ░░ ░      ░  ░     ░ ░
                 ░                          ░               ░ {Fore.MAGENTA}by c0deninja{Style.RESET_ALL}
-                                                             {Fore.MAGENTA}Version: {Style.RESET_ALL}1.0.0
+                                                             {Fore.MAGENTA}Version: {Style.RESET_ALL}2.0.0
 """
 
 # --- Helper Functions ---
@@ -118,8 +416,14 @@ async def run_nuclei_scan_async(target_url, tech_name=None, version=None):
                  tags_to_add.add(f"{tech_name_lower}-{major_version}")
 
     else: # If no specific tech, run a broader default set (adjust as needed)
-        command.extend(["-tags", "cve,default,config,exposed-panels"])
-        command.extend(["-severity", "medium,high,critical"]) # Focus severity if no tech
+        # Focus tags on web, server, config, known CVEs, and common platforms
+        focused_tags = [
+            "web", "network", "cms", "framework", "waf", "config", "default",
+            "exposed-panels", "apache", "nginx", "iis", "cve"
+        ]
+        command.extend(["-tags", ",".join(focused_tags)])
+        # Keep severity filter for the broad scan to manage noise
+        command.extend(["-severity", "medium,high,critical"])
 
     log.debug(f"Running Nuclei command: {' '.join(command)}")
     try:
@@ -222,6 +526,212 @@ async def fetch_url(session, url, params=None, method='GET', data=None, headers=
     except Exception as e:
         log.error(f"Unexpected error fetching {url}: {type(e).__name__} - {e}")
         return None
+
+# --- Enhanced Technology Detection Functions ---
+
+async def custom_tech_detection(session, url, html_content, headers, cookies):
+    """Custom technology detection using fingerprints."""
+    detected_tech = {}
+    
+    for tech_name, patterns in CUSTOM_TECH_PATTERNS.items():
+        confidence = 0
+        version_hints = []
+        
+        # Check headers
+        for header_name, pattern in patterns['headers'].items():
+            if header_name.lower() in headers:
+                header_value = headers[header_name.lower()]
+                if re.search(pattern, header_value, re.IGNORECASE):
+                    confidence += 30
+                    # Try to extract version from header
+                    version_match = re.search(r'[\d]+\.[\d]+\.?[\d]*', header_value)
+                    if version_match:
+                        version_hints.append(version_match.group())
+        
+        # Check HTML content
+        for html_pattern in patterns['html']:
+            if re.search(html_pattern, html_content, re.IGNORECASE):
+                confidence += 20
+                # Try to extract version from HTML
+                version_matches = re.findall(r'version["\s]*[:\s]*["\']?([\d]+\.[\d]+\.?[\d]*)', html_content, re.IGNORECASE)
+                version_hints.extend(version_matches)
+        
+        # Check cookies
+        for cookie_pattern in patterns['cookies']:
+            for cookie_name in cookies:
+                if cookie_pattern in cookie_name.lower():
+                    confidence += 15
+                    break
+        
+        # Check common URLs (make additional requests if needed)
+        if patterns['urls'] and confidence > 0:  # Only check URLs if we already have some confidence
+            for test_url in patterns['urls'][:2]:  # Limit to first 2 URLs to avoid too many requests
+                try:
+                    full_url = url.rstrip('/') + test_url
+                    async with session.head(full_url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status == 200:
+                            confidence += 10
+                            break
+                except:
+                    continue  # Ignore errors for URL checks
+        
+        # If confidence is high enough, add to detected technologies
+        if confidence >= 30:  # Minimum threshold
+            # Determine best version
+            best_version = None
+            if version_hints:
+                # Use the most complete version found
+                version_hints = list(set(version_hints))  # Remove duplicates
+                best_version = max(version_hints, key=lambda x: len(x.split('.')))
+            
+            detected_tech[tech_name] = {
+                'version': best_version,
+                'confidence': confidence,
+                'method': 'custom_fingerprint'
+            }
+            
+    return detected_tech
+
+async def builtwith_detection(session, url, builtwith_api_key=None):
+    """BuiltWith API detection (requires API key)."""
+    if not builtwith_api_key:
+        return {}
+    
+    try:
+        domain = urlparse(url).netloc
+        params = {
+            'KEY': builtwith_api_key,
+            'LOOKUP': domain,
+            'NOMETA': '1',
+            'NOATTR': '1'
+        }
+        
+        data = await fetch_url(session, BUILTWITH_API_URL, params=params)
+        if not data or 'Results' not in data:
+            return {}
+        
+        detected_tech = {}
+        for result in data['Results']:
+            for category in result.get('Result', {}).get('Paths', []):
+                for path_data in category.get('Technologies', []):
+                    tech_name = path_data.get('Name', '').lower()
+                    if tech_name:
+                        detected_tech[tech_name] = {
+                            'version': None,  # BuiltWith doesn't always provide versions in free tier
+                            'confidence': 90,
+                            'method': 'builtwith'
+                        }
+        
+        return detected_tech
+    except Exception as e:
+        log.debug(f"BuiltWith detection failed for {url}: {e}")
+        return {}
+
+async def enhanced_wappalyzer_detection(session, url):
+    """Enhanced Wappalyzer detection with better error handling."""
+    try:
+        from Wappalyzer import Wappalyzer, WebPage
+        wappalyzer = Wappalyzer.latest()
+        
+        # Fetch webpage content with headers
+        page_content = None
+        headers = {}
+        cookies = {}
+        
+        async with session.get(url, allow_redirects=True) as response:
+            if response.status == 200:
+                page_content = await response.text()
+                headers = {k.lower(): v for k, v in response.headers.items()}  # Normalize header keys
+                if response.cookies:
+                    try:
+                        cookies = {cookie.key: cookie.value for cookie in response.cookies}
+                    except AttributeError:
+                        # Handle case where cookies might be in a different format
+                        cookies = {}
+        
+        if not page_content:
+            return {}, headers, cookies, page_content or ""
+        
+        # Analyze with Wappalyzer
+        webpage = WebPage(url, html=page_content, headers=headers)
+        detected_raw = wappalyzer.analyze_with_versions_and_categories(webpage)
+        
+        detected_tech = {}
+        for tech, info in detected_raw.items():
+            version = extract_tech_version(info)
+            detected_tech[tech.lower()] = {
+                'version': version,
+                'confidence': 95,
+                'method': 'wappalyzer',
+                'categories': info.get('categories', [])
+            }
+        
+        return detected_tech, headers, cookies, page_content
+        
+    except ImportError:
+        log.warning("Wappalyzer not found. Install with 'pip install python-Wappalyzer'")
+        return {}, {}, {}, ""
+    except Exception as e:
+        log.error(f"Wappalyzer detection failed for {url}: {e}")
+        return {}, {}, {}, ""
+
+async def comprehensive_tech_detection(session, url, builtwith_api_key=None, detection_methods=['wappalyzer', 'custom']):
+    """Comprehensive technology detection combining multiple methods."""
+    log.info(f"Starting comprehensive technology detection for {url} using methods: {detection_methods}")
+    
+    all_detected_tech = {}
+    headers = {}
+    cookies = {}
+    html_content = ""
+    
+    # Method 1: Enhanced Wappalyzer (if enabled)
+    if 'wappalyzer' in detection_methods:
+        wap_tech, headers, cookies, html_content = await enhanced_wappalyzer_detection(session, url)
+        for tech, info in wap_tech.items():
+            all_detected_tech[tech] = info
+    
+    # Method 2: Custom fingerprint detection (if enabled)
+    if 'custom' in detection_methods:
+        # If we don't have content from Wappalyzer, fetch it now
+        if not html_content:
+            try:
+                async with session.get(url, allow_redirects=True) as response:
+                    if response.status == 200:
+                        html_content = await response.text()
+                        headers = {k.lower(): v for k, v in response.headers.items()}
+                        if response.cookies:
+                            try:
+                                cookies = {cookie.key: cookie.value for cookie in response.cookies}
+                            except AttributeError:
+                                # Handle case where cookies might be in a different format
+                                cookies = {}
+            except Exception as e:
+                log.debug(f"Failed to fetch content for custom detection: {e}")
+        
+        if html_content:  # Only if we have HTML content
+            custom_tech = await custom_tech_detection(session, url, html_content, headers, cookies)
+            for tech, info in custom_tech.items():
+                if tech in all_detected_tech:
+                    # Merge information, prefer higher confidence
+                    if info['confidence'] > all_detected_tech[tech].get('confidence', 0):
+                        all_detected_tech[tech].update(info)
+                    # Combine methods
+                    existing_method = all_detected_tech[tech].get('method', '')
+                    all_detected_tech[tech]['method'] = f"{existing_method}+custom_fingerprint" if existing_method else 'custom_fingerprint'
+                else:
+                    all_detected_tech[tech] = info
+    
+    # Method 3: BuiltWith (if enabled and API key provided)
+    if 'builtwith' in detection_methods and builtwith_api_key:
+        builtwith_tech = await builtwith_detection(session, url, builtwith_api_key)
+        for tech, info in builtwith_tech.items():
+            if tech not in all_detected_tech:
+                all_detected_tech[tech] = info
+    elif 'builtwith' in detection_methods and not builtwith_api_key:
+        log.warning("BuiltWith detection requested but no API key provided. Skipping BuiltWith detection.")
+    
+    log.info(f"Comprehensive detection found {len(all_detected_tech)} technologies for {url}")
+    return all_detected_tech
 
 async def check_cves_async(session, tech_name, version):
     """Checks NVD for CVEs asynchronously."""
@@ -649,42 +1159,58 @@ async def process_url(url, session, args, cve_cache):
     min_severity_level = SEVERITY_LEVELS.get(args.severity, 0)
 
     try:
-        # --- Technology Detection (Optional) ---
+        # --- Enhanced Technology Detection ---
         detected_technologies = {}
-        if not args.no_tech and not args.technology: # Skip Wappalyzer if specific tech or no-tech flag
+        if not args.no_tech and not args.technology: # Skip tech detection if specific tech or no-tech flag
             try:
-                # Wappalyzer setup (sync, consider running in executor if it blocks heavily)
-                from Wappalyzer import Wappalyzer, WebPage
-                wappalyzer = Wappalyzer.latest()
-                # Fetch webpage content using aiohttp for consistency
-                page_content = await fetch_url(session, url)
-                if not page_content or not isinstance(page_content, str):
-                     raise ValueError("Failed to fetch webpage content for Wappalyzer")
+                # Use comprehensive detection system with specified methods
+                builtwith_key = os.getenv('BUILTWITH_API_KEY')  # Optional BuiltWith API key
+                detected_technologies = await comprehensive_tech_detection(
+                    session, url, builtwith_key, args.detection_methods
+                )
+                
+                log.info(f"Comprehensive detection found {len(detected_technologies)} technologies for {url}")
+                
+                # Display detected technologies with confidence and method
+                for tech, info in detected_technologies.items():
+                    confidence = info.get('confidence', 0)
+                    
+                    # Show all detections if requested, or only high-confidence ones
+                    if args.show_all_detections or confidence >= args.confidence_threshold:
+                        version_str = f" v{info['version']}" if info['version'] else ""
+                        confidence_str = f" ({confidence}% confidence)"
+                        method_str = f" via {info['method']}"
+                        
+                        # Color code based on confidence
+                        if confidence >= 90:
+                            confidence_color = Fore.GREEN
+                        elif confidence >= 70:
+                            confidence_color = Fore.YELLOW
+                        else:
+                            confidence_color = Fore.RED
+                        
+                        print(f"\n{Fore.GREEN}✓ Detected: {tech.title()}{Style.RESET_ALL}{Fore.YELLOW}{version_str}{Style.RESET_ALL}{confidence_color}{confidence_str}{Style.RESET_ALL}{Fore.LIGHTBLACK_EX}{method_str}{Style.RESET_ALL}")
 
-                # Analyze with Wappalyzer (this part is synchronous)
-                # To make fully async, Wappalyzer would need async support or run in executor
-                webpage = WebPage(url, html=page_content, headers={}) # Basic usage
-                detected_raw = wappalyzer.analyze_with_versions_and_categories(webpage)
-                log.info(f"Detected {len(detected_raw)} technologies for {url}")
-
-                for tech, info in detected_raw.items():
-                     version = extract_tech_version(info)
-                     detected_technologies[tech] = {'version': version, 'categories': info.get('categories', [])}
-                     print(f"\n{Fore.GREEN}Detected: {tech}{Style.RESET_ALL} {Fore.YELLOW}{version or ''}{Style.RESET_ALL}")
-
-            except ImportError:
-                 log.warning("Wappalyzer not found. Skipping technology detection. Install with 'pip install python-Wappalyzer'")
-                 args.no_tech = True # Force no-tech mode if import fails
             except Exception as e:
-                log.error(f"Error during technology detection for {url}: {e}")
-                results['errors'].append(f"Wappalyzer error: {e}")
-                # Continue without tech detection if Wappalyzer fails
+                log.error(f"Error during comprehensive technology detection for {url}: {e}")
+                results['errors'].append(f"Tech detection error: {e}")
+                # Continue without tech detection if it fails
 
-        results['technologies'] = detected_technologies
+        # Convert to the expected format for nuclei scanning
+        formatted_technologies = {}
+        for tech, info in detected_technologies.items():
+            formatted_technologies[tech] = {
+                'version': info['version'],
+                'categories': info.get('categories', []),
+                'confidence': info.get('confidence', 0),
+                'method': info.get('method', 'unknown')
+            }
+
+        results['technologies'] = formatted_technologies # Store all detected technologies
 
         # --- Nuclei Scanning ---
         nuclei_tasks = []
-        tech_scan_map = {} # To map task index back to tech name/info
+        tech_scan_map = {} # Initialize the map
 
         if args.technology:
              # Scan only for the specified technology
@@ -693,46 +1219,35 @@ async def process_url(url, session, args, cve_cache):
              # We don't have version info here, Nuclei will match templates broadly for the tech
              task = asyncio.create_task(run_nuclei_scan_async(url, tech_name_arg))
              nuclei_tasks.append(task)
-             # FIX: Store a dictionary, not just the string
              tech_scan_map[0] = {"name": tech_name_arg, "version": None}
-        elif args.no_tech or not detected_technologies:
-            # Run broad Nuclei scan if --no-tech, or if Wappalyzer failed
-            scan_reason = "--no-tech specified" if args.no_tech else "Wappalyzer failed"
+        elif args.no_tech or not detected_technologies: # Check original detected_technologies
+            # Run broad Nuclei scan if --no-tech, or if tech detection failed or found no tech
+            scan_reason = "--no-tech specified" if args.no_tech else "Tech detection failed or no tech detected"
             log.info(f"Running broad Nuclei scan ({scan_reason}) for {url}")
-            task = asyncio.create_task(run_nuclei_scan_async(url))
+            task = asyncio.create_task(run_nuclei_scan_async(url)) # Run broad scan
             nuclei_tasks.append(task)
-            # FIX: Store a dictionary, not just the string
             tech_scan_map[0] = {"name": "Broad Scan", "version": None}
         else:
             # Scan for each detected technology concurrently
-            if detected_technologies:
-                 log.info(f"Running Nuclei scans for {len(detected_technologies)} detected technologies...")
-                 i = 0
-                 for tech_name, tech_info in detected_technologies.items():
-                    task = asyncio.create_task(run_nuclei_scan_async(url, tech_name, tech_info.get('version')))
-                    nuclei_tasks.append(task)
-                    # FIX: Store a dictionary, not just the string
-                    tech_scan_map[i] = {"name": tech_name, "version": tech_info.get('version')}
-                    i += 1
-            else:
-                 log.info("No technologies detected by Wappalyzer. Running broad Nuclei scan.")
-                 task = asyncio.create_task(run_nuclei_scan_async(url)) # Default broad scan
-                 nuclei_tasks.append(task)
-                 # FIX: Store a dictionary, not just the string
-                 tech_scan_map[0] = {"name": "Broad Scan", "version": None}
+            # Filter out low-confidence detections for Nuclei scanning using user-specified threshold
+            high_confidence_tech = {k: v for k, v in detected_technologies.items() 
+                                  if v.get('confidence', 0) >= args.confidence_threshold}
+            
+            log.info(f"Running Nuclei scans for {len(high_confidence_tech)} technologies above {args.confidence_threshold}% confidence...")
+            i = 0
+            for tech_name, tech_info in high_confidence_tech.items():
+                task = asyncio.create_task(run_nuclei_scan_async(url, tech_name, tech_info.get('version')))
+                nuclei_tasks.append(task)
+                tech_scan_map[i] = {"name": tech_name, "version": tech_info.get('version')}
+                i += 1
 
         # --- Gather Nuclei Scan Results ---
         nuclei_outputs = await asyncio.gather(*nuclei_tasks, return_exceptions=True)
 
-        # --- Process and Print Nuclei Results (Enrichment Removed) ---
-        # Removed: all_findings_enriched = []
-        # Removed: enrichment_tasks = []
-
+        # --- Process and Print Nuclei Results ---
         for i, output_result in enumerate(nuclei_outputs):
-            # Now scan_info will be the dictionary correctly
             scan_info = tech_scan_map.get(i, {"name": "Unknown Scan", "version": None})
             scan_tech_name = scan_info["name"]
-            # Removed: scan_tech_version = scan_info["version"]
 
             if isinstance(output_result, Exception):
                 log.error(f"Nuclei scan task failed for {scan_tech_name} on {url}: {output_result}")
@@ -757,10 +1272,6 @@ async def process_url(url, session, args, cve_cache):
 
                      # Store the raw finding in the results
                      results['findings'].append(finding)
-
-                 # Removed: Scheduling enrichment tasks
-
-        # --- Removed: Gather Enrichment Results --- 
 
     except FileNotFoundError: # Catch if run_nuclei_scan_async raises it
         log.critical("Nuclei command not found during URL processing. Aborting.")
@@ -788,17 +1299,30 @@ def parse_arguments():
         '-s', '--severity', choices=SEVERITY_LEVELS.keys(), default='info',
         help='Minimum severity level to report (default: info)'
     )
-    parser.add_argument('--no-tech', action='store_true', help='Skip Wappalyzer technology detection and run broader Nuclei scans')
+    parser.add_argument('--no-tech', action='store_true', help='Skip technology detection and run broader Nuclei scans')
     parser.add_argument('--ignore-ssl', action='store_true', help='Ignore SSL certificate verification errors')
-    parser.add_argument('-t', '--technology', help='Specify a single technology to scan for (e.g., "wordpress", "nginx"). Skips Wappalyzer.')
+    parser.add_argument('-t', '--technology', help='Specify a single technology to scan for (e.g., "wordpress", "nginx"). Skips tech detection.')
     parser.add_argument('-c', '--concurrency', type=int, default=10, help='Number of concurrent URL/enrichment tasks (default: 10)')
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--builtwith-key', help='BuiltWith API key for enhanced technology detection (optional)')
+    parser.add_argument('--confidence-threshold', type=int, default=50, help='Minimum confidence threshold for running Nuclei scans (default: 50)')
+    parser.add_argument('--detection-methods', nargs='+', choices=['wappalyzer', 'custom', 'builtwith'], 
+                        default=['wappalyzer', 'custom'], help='Technology detection methods to use (default: wappalyzer custom)')
+    parser.add_argument('--show-all-detections', action='store_true', help='Show all technology detections regardless of confidence')
 
     args = parser.parse_args()
 
     # Validate concurrency
     if args.concurrency < 1:
         parser.error("Concurrency must be at least 1")
+    
+    # Validate confidence threshold
+    if not 0 <= args.confidence_threshold <= 100:
+        parser.error("Confidence threshold must be between 0 and 100")
+    
+    # Set BuiltWith key in environment if provided
+    if args.builtwith_key:
+        os.environ['BUILTWITH_API_KEY'] = args.builtwith_key
 
     return args
 
@@ -935,7 +1459,6 @@ async def process_url_with_semaphore(url, session, args, semaphore, cve_cache):
      """Wrapper to use semaphore with process_url"""
      async with semaphore:
          return await process_url(url, session, args, cve_cache)
-
 
 if __name__ == "__main__":
     try:

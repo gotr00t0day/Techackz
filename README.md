@@ -9,14 +9,22 @@
   <a href="#license">License</a>
 </p>
 
-TechackZ is an advanced, asynchronous web technology detection and vulnerability assessment tool. It combines Wappalyzer's technology detection with Nuclei's security scanning capabilities, enriching findings with data from NVD, OSV, ExploitDB, Vulners, and Metasploit module lookups.
+TechackZ is an advanced, asynchronous web technology detection and vulnerability assessment tool. It combines multiple technology detection methods (Wappalyzer, custom fingerprinting, and BuiltWith) with Nuclei's security scanning capabilities, enriching findings with data from NVD, OSV, ExploitDB, Vulners, and Metasploit module lookups.
 
 ## 🚀 Features
 
 - **Asynchronous Scanning:** High-speed, concurrent scanning of multiple targets and enrichment lookups using `asyncio` and `aiohttp`.
-- **Technology Stack Detection:**
-    - Leverages Wappalyzer to identify web technologies, frameworks, and versions.
-    - Normalizes version numbers for accurate matching.
+- **Comprehensive Technology Stack Detection:**
+    - **Wappalyzer Integration:** Leverages Wappalyzer to identify web technologies, frameworks, and versions.
+    - **Custom Fingerprinting:** Advanced pattern-based detection for 25+ technologies including CMS, web servers, frameworks, CDNs, WAFs, and development tools.
+    - **BuiltWith API Support:** Optional integration with BuiltWith API for enhanced commercial-grade detection.
+    - **Multi-Method Validation:** Combines multiple detection methods for higher accuracy and confidence scoring.
+    - **Version Extraction:** Intelligent version detection from headers, HTML content, and application responses.
+- **Enhanced Detection Features:**
+    - Confidence scoring (0-100%) for each detected technology
+    - Configurable confidence thresholds for Nuclei scanning
+    - Support for enabling/disabling specific detection methods
+    - Color-coded confidence display in terminal output
 - **Multi-Source Vulnerability Enrichment:**
     - Queries **NIST NVD** for known CVEs based on detected technology/version (fallback).
     - Queries **OSV (Open Source Vulnerability database)** for vulnerabilities affecting detected packages/versions.
@@ -26,18 +34,20 @@ TechackZ is an advanced, asynchronous web technology detection and vulnerability
     - Caches enrichment results per run to avoid redundant API calls.
 - **Targeted Nuclei Scanning:**
     - Runs Nuclei scans focused on tags related to detected technologies and versions.
+    - Confidence-based filtering to reduce false positives and noise.
     - Option to run broader scans (`--no-tech`) or scan for a single specified technology (`-t`).
-    - Gracefully handles and skips scans for common technologies unlikely to have specific Nuclei templates (e.g., analytics, CDNs).
+    - Gracefully handles and skips scans for common technologies unlikely to have specific Nuclei templates.
 - **Customizable & User-Friendly:**
     - Control concurrency (`-c`) for optimal performance.
-    - Set network timeouts (`--timeout`).
+    - Set detection method preferences (`--detection-methods`).
+    - Configure confidence thresholds (`--confidence-threshold`).
     - Filter results by severity (`-s`).
     - Ignore SSL errors (`--ignore-ssl`).
     - Progress bar (`tqdm`) when scanning multiple targets from a file.
     - Debug logging (`-d`) for detailed insight.
 - **Comprehensive Reporting:**
-    - Structured JSON output (`-o`) containing detected tech, Nuclei findings, and all enrichment data.
-    - Colorized console output with clear severity indicators.
+    - Structured JSON output (`-o`) containing detected tech, confidence scores, Nuclei findings, and all enrichment data.
+    - Colorized console output with clear severity indicators and confidence levels.
 
 ## 📋 Prerequisites
 
@@ -45,6 +55,7 @@ TechackZ is an advanced, asynchronous web technology detection and vulnerability
 - Go (for Nuclei installation)
 - Nuclei installed and available in your system's PATH.
 - Internet connection for API access (NVD, OSV, Vulners, ExploitDB, GitHub).
+- _(Optional)_ BuiltWith API key for enhanced commercial detection.
 
 ## 🔧 Installation
 
@@ -63,23 +74,22 @@ TechackZ is an advanced, asynchronous web technology detection and vulnerability
     ```bash
     nuclei -update-templates
     ```
-4.  _(Optional)_ Run the old install script if needed (may be outdated):
-    ```bash
-    chmod +x install.sh
-    ./install.sh
-    ```
-    _(Note: Prefer manual installation of Nuclei as described above)_
+4.  _(Optional)_ Get a BuiltWith API key:
+    - Visit [BuiltWith API](https://builtwith.com/api) to get an API key
+    - Use `--builtwith-key YOUR_KEY` or set `BUILTWITH_API_KEY` environment variable
 
 ## 📖 Usage
 
 ```bash
 usage: techackz.py [-h] [-u URL | -f FILE] [-o OUTPUT]
-                   [-s {info,low,medium,high,critical,unknown}] [--no-tech]
+                   [-s {info,low,medium,high,critical}] [--no-tech]
                    [--ignore-ssl] [-t TECHNOLOGY] [-c CONCURRENCY] [-d]
-                   [--timeout TIMEOUT]
+                   [--builtwith-key BUILTWITH_KEY]
+                   [--confidence-threshold CONFIDENCE_THRESHOLD]
+                   [--detection-methods {wappalyzer,custom,builtwith} [...]]
+                   [--show-all-detections]
 
-Detect web technologies, run targeted Nuclei scans, and enrich findings with
-CVE/exploit data.
+Detect web technologies and run targeted Nuclei scans with CVE enrichment.
 
 options:
   -h, --help            show this help message and exit
@@ -88,24 +98,84 @@ options:
                         per line)
   -o OUTPUT, --output OUTPUT
                         Output file to save results (JSON format)
-  -s {info,low,medium,high,critical,unknown}, --severity {info,low,medium,high,critical,unknown}
+  -s {info,low,medium,high,critical}, --severity {info,low,medium,high,critical}
                         Minimum severity level to report (default: info)
-  --no-tech             Skip Wappalyzer technology detection; run broader
-                        Nuclei scans only.
-  --ignore-ssl          Ignore SSL/TLS certificate verification errors (use
-                        with caution!).
+  --no-tech             Skip technology detection and run broader Nuclei scans
+  --ignore-ssl          Ignore SSL/TLS certificate verification errors
   -t TECHNOLOGY, --technology TECHNOLOGY
                         Scan ONLY for this specific technology (e.g.,
-                        "wordpress", "nginx"). Skips Wappalyzer.
+                        "wordpress", "nginx"). Skips tech detection.
   -c CONCURRENCY, --concurrency CONCURRENCY
-                        Number of concurrent URL processing tasks (default:
-                        10)
-  -d, --debug           Enable debug logging for verbose output.
-  --timeout TIMEOUT     Overall timeout in seconds for network requests per
-                        URL (default: 120)
+                        Number of concurrent URL processing tasks (default: 10)
+  -d, --debug           Enable debug logging for verbose output
+  --builtwith-key BUILTWITH_KEY
+                        BuiltWith API key for enhanced technology detection
+  --confidence-threshold CONFIDENCE_THRESHOLD
+                        Minimum confidence threshold for running Nuclei scans
+                        (default: 50)
+  --detection-methods {wappalyzer,custom,builtwith} [{wappalyzer,custom,builtwith} ...]
+                        Technology detection methods to use (default:
+                        wappalyzer custom)
+  --show-all-detections
+                        Show all technology detections regardless of confidence
 
-Example: python techackz.py -u https://example.com -o results.json -s medium --concurrency 20
+Examples:
+  # Basic scan with comprehensive detection
+  python techackz.py -u https://example.com
+  
+  # High-confidence detection only
+  python techackz.py -u https://example.com --confidence-threshold 80
+  
+  # Custom fingerprinting only (fastest)
+  python techackz.py -u https://example.com --detection-methods custom
+  
+  # All detection methods with BuiltWith API
+  python techackz.py -u https://example.com --detection-methods wappalyzer custom builtwith --builtwith-key YOUR_KEY
+  
+  # Show all detections regardless of confidence
+  python techackz.py -u https://example.com --show-all-detections
+  
+  # Multiple URLs with custom settings
+  python techackz.py -f urls.txt -o results.json --confidence-threshold 70 --concurrency 20
 ```
+
+## 🎯 Detection Methods
+
+### 1. Wappalyzer Detection
+- Uses the python-Wappalyzer library
+- Excellent for modern web technologies and frameworks
+- High accuracy for popular technologies
+- **Confidence:** 95%
+
+### 2. Custom Fingerprinting
+- Advanced pattern-based detection engine
+- Covers 25+ technology categories:
+  - **CMS:** WordPress, Drupal, Joomla, Shopify, Magento
+  - **Web Servers:** Apache, Nginx, IIS
+  - **Frameworks:** Django, Flask, Laravel, Rails
+  - **CDNs:** Cloudflare, AWS, CloudFront
+  - **WAF/Security:** Incapsula, F5 Big-IP
+  - **Development Tools:** phpMyAdmin, Adminer
+  - **And many more...**
+- Analyzes headers, HTML content, cookies, and response patterns
+- **Confidence:** 30-90% based on detection strength
+
+### 3. BuiltWith API
+- Commercial-grade detection service
+- Comprehensive technology database
+- Requires API key (paid service)
+- **Confidence:** 90%
+
+## 📊 Confidence Scoring
+
+TechackZ assigns confidence scores (0-100%) to each detected technology:
+
+- **90-100%:** High confidence (green) - Very reliable detection
+- **70-89%:** Medium confidence (yellow) - Good detection with minor uncertainty  
+- **50-69%:** Low confidence (red) - Detection present but may need verification
+- **Below 50%:** Not used for Nuclei scanning by default
+
+Use `--confidence-threshold` to control which detections trigger Nuclei scans.
 
 ## ⚠️ Disclaimer
 
@@ -129,6 +199,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Wappalyzer](https://github.com/AliasIO/Wappalyzer) / [python-Wappalyzer](https://github.com/chorsley/python-Wappalyzer)
 - [Nuclei](https://github.com/projectdiscovery/nuclei)
+- [BuiltWith](https://builtwith.com/)
 - [NIST NVD](https://nvd.nist.gov/)
 - [OSV (Open Source Vulnerability database)](https://osv.dev/)
 - [Exploit-DB](https://www.exploit-db.com/)
